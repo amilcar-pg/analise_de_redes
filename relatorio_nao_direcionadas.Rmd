@@ -1,0 +1,360 @@
+---
+title: "Modelo de relatório para Redes Sociais"
+subtitle: "Modelo para redes não direcionadas"
+author: "Amilcar L. do Prado G. Gramacho"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    self_contained: true
+    default_style: "light"
+    downcute_theme: "chaos"
+    use_bookdown : TRUE
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+# Global options
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+# Importando dados
+
+Este relatório está por padrão com a visualização habilitada dos códigos utilizados para gerar os outputs que aqui serão visualizados. Caso não seja de seu interesse, basta mudar a opção localizada no canto superior direito da tela para "Hide", e você poderá ler o relatório de forma mais limpa.
+
+## Sobre os dados
+
+Os dados que iremos tratar neste modelo são sobre as interações entre os alunos de uma escola. Para explorar as possibilidades do Rmd e da exportação em HTML, insiro abaixo um mapa com as orientações de um centro de ensino para fingirmos que os dados são de lá.
+
+```{r echo=FALSE, fig.align='center', fig.height=5, out.width='100%'}
+library(leaflet)
+leaflet() %>% addTiles() %>% setView(-46.73116452780621, -23.559275555556653, zoom = 15)
+```
+
+## Importação
+
+Para a montagem do nosso relatório, devemos inserir os arquivos `arestas.csv` e `vertices.csv` na pasta `dados` do diretório.
+
+Uma vez feito isso, o seguinte código importará os dados para o ambiente R.
+
+```{r importacao_dados, message=FALSE}
+path_arestas <- here::here("dados", "arestas.csv")
+
+path_vertices <- here::here("dados", "vertices.csv")
+
+df_arestas <- readr::read_csv(path_arestas); rm(path_arestas)
+
+df_vertices <- readr::read_csv(path_vertices); rm(path_vertices)
+```
+
+## Limpeza
+
+Antes de seguir com a análise é importante ter certeza de que todos os dados estão corretos.
+
+Caso o arquivo `arestas.csv` seja composto por apenas duas colunas com as interções entre os vértices, o próximo passo será o de agrupar tais linhas e criar uma nova coluna no dataframe que inclua a frequência com que a interação se repete.
+
+Considerando que este é o caso dos dados que estamos analisando neste modelo, o próximo código será rodado.
+
+```{r limpando_dados}
+df_arestas <- as.data.frame(table(df_arestas))
+
+df_arestas <- subset(df_arestas,Freq>0)
+```
+
+## Criação de objetos
+
+Agora que os dados já estão no formato que precisamos, podemos criar o objeto `igraph` que será usado para plotar a rede.
+
+```{r criando_objeto_igraph}
+sn_data <- igraph::graph_from_data_frame(df_arestas, 
+                                         directed = FALSE, 
+                                         vertices = df_vertices)
+
+igraph::E(sn_data)$weight <- igraph::E(sn_data)$Freq
+```
+
+Aqui declaramos para o R tanto as interações quanto os metadados associados aos vértices.
+
+Importante destacar que os dados analisados são não direcionados, por isso o argumento `directed = FALSE` foi inserido.
+
+Pelo conhecimento sobre a base que estamos trabalhando, sabemos que existem valores `Unknown` no atributo `Gender`, vamos declará-los de forma com que o R consiga entender.
+
+```{r}
+igraph::V(sn_data)$Gender[igraph::V(sn_data)$Gender == 'Unknown'] <- NA
+```
+
+# Explorando os dados
+
+Primeiramente vamos analisar os dados gerais do objeto `sn_data`.
+
+```{r explorando_os_dados, echo=TRUE}
+summary(sn_data)
+```
+
+Como observado, a rede criada possui `r igraph::gorder(sn_data)` vértices, que interagem entre si formando `r igraph::gsize(sn_data)` arestas.
+
+Como esperado, considerando os dados que inserimos como output, os metadados associados aos vértices são:
+
+- `r names(igraph::vertex.attributes(sn_data)[1])`, `r names(igraph::vertex.attributes(sn_data)[2])` e `r names(igraph::vertex.attributes(sn_data)[3])`
+
+Analisando o atributo Class, verificamos que possuímos os seguintes valores: `r knitr::combine_words(sort(unique(igraph::V(sn_data)$Class)), and = "e ")`.
+
+Antes de avançarmos para as análises de métricas de Redes Sociais, podemos finalizar esse breve exploratório plotando uma pequena parte da matriz de adjacências associada à rede que vamos criar
+
+```{r fig.height=0.5, fig.width=0.5, warning=FALSE}
+sn_data[c(1:10), c(1:10)]
+```
+
+Como esperado, pelo fato de se tratar de uma rede não direcionada, a matriz é simétrica.
+
+# Métricas de Centralidade
+
+## Grau de centralidade
+
+Vamos calcular quantas arestas estão conectadas aos vértices para entender seus graus de centralidade.
+
+Como a rede é não direcionada, consideraremos qualquer tipo de aresta que tenha contato com o vértice, por isso o argumento `mode = c("All")`.
+
+Uma vez calculado, inseriremos essa informação como um metadado do vértice para podermos usar essa informação futuramente.
+
+```{r}
+sn_data_deg <- igraph::degree(sn_data, mode = c("All"))
+
+igraph::V(sn_data)$degree <- sn_data_deg
+```
+
+Assim, temos que o vértice que possui o maior grau de centralidade é o `r names(which.max(sn_data_deg))`, com `r which.max(sn_data_deg)[[1]]` graus.
+
+## Eigenvector
+
+A Eigenvector é uma medida que atribui valores maiores a vértices que estão conectados com mais vértices.
+
+A diferença com relação à métrica anterior é que esta considera também conexões de segundo grau e nos gera um resultado entre 0 e 1.
+
+Faremos o mesmo processo da sessão anterior.
+
+```{r}
+sn_data_eig <- igraph::evcent(sn_data)$vector
+
+igraph::V(sn_data)$Eigen <- sn_data_eig
+```
+
+Assim, temos que o vértice que possui o maior grau de centralidade do autovetor é o `r names(which.max(sn_data_eig))`, com `r which.max(sn_data_eig)[[1]]` graus.
+
+## Betweeness
+
+Esta métrica busca demonstrar o cálculo percentual de caminhos que passam por um dado vértice.
+
+Novamente, o argumento `directed = FALSE` precisa estar presente.
+
+Mais uma vez, repetiremos os procedimentos.
+
+```{r}
+sn_data_bw <- igraph::betweenness(sn_data, directed = FALSE)
+
+igraph::V(sn_data)$betweenness <- sn_data_bw
+```
+
+<br/><br/>
+
+Assim, temos que o vértice que possui o maior betweeness é o `r names(which.max(sn_data_bw))`, com `r which.max(sn_data_bw)[[1]]` graus.
+
+<br/><br/>
+
+## Tabela com todos os indicadores
+
+Agora que calculamos as métricas mais interessantes e as inserimos no objeto igraph, podemos exportar o arquivo em formato tabular para ser usado em outras análises.
+
+```{r}
+df_sn <- igraph::as_long_data_frame(sn_data)
+
+readr::write_csv(df_sn, "output/complete_sn.csv")
+```
+
+Assim, teremos acesso a um arquivo com as colunas indicando as variáveis que acabamos de calcular semelhante ao representado abaixo, mas com `r nrow(df_sn)` linhas.
+
+```{r echo=FALSE}
+df_sn |> 
+  head(10) |> 
+  knitr::kable() |> 
+  kableExtra::kable_minimal()
+```
+Seguindo essa lógica, sugere-se que sempre sejam adicionados atributos aos vértices caso seja de interesse, para que no final seja possível gerar um arquivo tabular.
+
+# Medindo a estrutura da rede
+
+## Network Density
+
+Esta medida serve para nos informar o quão densa é a rede. Isto é, o quão conectados estão os pontos entre si.
+
+Neste caso em um primeiro momento o código abaixo calcula a densidade da rede em geral, e depois de apenas uma das turmas da escola, para mostrar o quão mais interativos tendem os alunos a serem entre seus colegas de turma.
+
+Este é um hábito comum quando se faz análise de redes, comparar a densidade entre os grupos que fazem parte dela.
+
+```{r}
+igraph::edge_density(sn_data) 
+
+sn_data_1A <- igraph::induced_subgraph(sn_data, 
+                                                igraph::V(sn_data)[Class=="1A"], 
+                                                impl=c("auto"))
+
+igraph::edge_density(sn_data_1A)
+```
+
+
+## Assortativity
+
+Esta medida busca demonstrar exatamente o que acabamos de calcular no tópico anterior: indivíduos de mesma comunidade tendem a interagir mais entre si.
+
+Para calcular a `assortativity`, é necessário em um primeiro momento converter a variável que acreditamos que determine os clusters de acordo com a primeira linha do código abaixo. Ela basicamente pega cada um das entradas de texto e transforma em um valor numérico diferente que poderá ser usado como input em outros lugares.
+
+A linha seguinte busca calcular a assortatividade de acordo com a turma do estudante.
+
+```{r}
+cluster_tratado <- as.numeric(factor(igraph::V(sn_data)$Class))
+
+igraph::assortativity_nominal(sn_data, types=cluster_tratado)
+```
+
+Para entender se o resultado encontrado é alto ou baixo, vamos comparar com um que será criado aleatoriamente.
+
+A primeira linha apenas armazena o resultado encontrado para fins comparativos.
+
+As linhas seguintes buscam criar um objeto que armazenará um conjunto de dados formado por 1000 vértices aleatórios da base de dados com as turmas de que fazem parte realmente apagadas e substituídas por outras turmas aleatórias.
+
+```{r}
+assortativity_observada <- igraph::assortativity_nominal(sn_data, types=cluster_tratado)
+
+assortativity_aleatoria <- vector('list', 1000)
+
+for(i in 1:1000){assortativity_aleatoria[[i]] <- igraph::assortativity_nominal(sn_data, sample(cluster_tratado))}
+```
+
+<br/><br/>
+
+Agora vamos plotar os resultados observados para comprovar que os indivíduos dentro da mesma turma interagem **de fato** mais entre si.
+
+O histograma representa a distribuição aleatória, e a linha vermelha o resultado encontrado em nossos dados.
+
+<br/><br/>
+
+```{r}
+hist(unlist(assortativity_aleatoria), xlim = c(0,0.4))
+
+abline(v = assortativity_observada,col = "red", lty = 3, lwd=2)
+```
+
+O resultado encontrado nos mostra claramente que o índice dentro da turma é consideravelmente maior quando comparado com uma situação aleatória.
+
+# Visualização da rede
+
+Plotaremos a rede utilizando o tamanho do vértice de acordo com as 3 métricas de centralidade calculadas anteriormente:
+
+- Grau de centralidade;
+- Eigenvector;
+- Betweeness.
+
+Para garantir que todos os gráficos sairão com o mesmo formato, definiremos a seed antes de cada plotagem.
+
+Tudo que tiver com `RColorBrewer` é questão estética com relação às cores usadas nos gráficos.
+
+Sendo assim, para a base que estamos usando como modelo para este relatório, cada cor está relacionada à turma do estudante.
+
+O tamanho do vértice está com o grau de centralidade dividido por 3 e dentro da raíz por que se não ficaria muito grande, então quando for fazer a análise de uma rede diferente, isso pode mudar.
+
+O mesmo vale para as arestas.
+
+O Layout também vale a pena mudar dependendo da forma com que a rede criada pelos dados se comportar.
+
+## Plotando com o grau de centralidade
+
+```{r}
+set.seed(1001)
+
+pal<-RColorBrewer::brewer.pal(length(unique(igraph::V(sn_data)$Class)), "Set3")
+
+plot(sn_data,edge.color = 'black',vertex.label.cex =0.5,
+     vertex.color = pal[as.numeric(as.factor(igraph::vertex_attr(sn_data, "Class")))],
+     vertex.size = sqrt(sn_data_deg)/3, edge.width=sqrt(igraph::E(sn_data)$weight/800),
+     layout = igraph::layout.fruchterman.reingold)
+```
+
+### Plotando com o Eigenvector
+
+
+
+```{r}
+set.seed(1001)
+plot(sn_data,edge.color = 'black',vertex.label.cex =0.5,
+     vertex.color=pal[as.numeric(as.factor(igraph::vertex_attr(sn_data, "Class")))],
+     vertex.size = sqrt(sn_data_eig)*10, edge.width=sqrt(igraph::E(sn_data)$weight/800),
+     layout = igraph::layout.fruchterman.reingold)
+```
+
+### Plotando com o Betweeness
+
+```{r}
+set.seed(1001)
+plot(sn_data,edge.color = 'black',vertex.label.cex =0.5,
+     vertex.color=pal[as.numeric(as.factor(igraph::vertex_attr(sn_data, "Class")))],
+     vertex.size = sqrt(sn_data_bw)/3, edge.width=sqrt(igraph::E(sn_data)$weight/800),
+     layout = igraph::layout.fruchterman.reingold)
+```
+
+Em algum momento, fazer comentários sobre os gráficos encontrados é essencial.
+
+### Plotando um gráfico de dispersão para verificar a correlação
+
+O objetivo dessa parte do relatório é mostrar a correlação entre algumas medidas de centralidade em nossa base de dados.
+
+#### Entre grau e betweeness
+
+```{r}
+plot(igraph::V(sn_data)$degree, igraph::V(sn_data)$betweenness)
+```
+
+#### Entre Grau e eigenvector
+
+```{r}
+plot(igraph::V(sn_data)$degree, igraph::V(sn_data)$Eigen)
+```
+
+# Detecção de comunidades
+
+Utilizando o método de Louvain o algoritmo irá encontrar as comunidades de nossa rede
+
+```{r}
+comunidades <- igraph::cluster_louvain(sn_data)
+```
+
+O código acima chegou à conclusão de que em nossa rede temo `r length(igraph::communities(igraph::cluster_louvain(sn_data)))` comunidades.
+
+Dentro do objeto `comunidades` também conseguimos identificar em qual comunidade cada vértice foi alocado, por exemplo, caso tenhamos este interesse.
+
+## Plotando comunidades
+
+Finalmente chegamos ao objetivo final, que seria plotar o gráfico com as comunidades.
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1001) 
+
+plot(comunidades, sn_data, edge.color = 'black',vertex.label.cex =0.5,
+     vertex.color=pal[as.numeric(as.factor(igraph::vertex_attr(sn_data, "Class")))],
+     vertex.size = sqrt(sn_data_bw)/3, edge.width=sqrt(igraph::E(sn_data)$weight/800),
+     layout = igraph::layout.fruchterman.reingold)
+```
+
+Com esta imagem podemos escrever nossa análise.
+
+Neste caso em específico, a grande surpresa é que foram identificadas menos comunidades do que existiam de classes na escola, o que indica um alto grau de interação entre alguns indivíduos de classes diferentes.
+
+# Conclusão
+
+Este modelo foi criado como um parâmetro para realizar uma análise de redes básica. De modo geral ele foi pensado para ser usado apenas pelo autor, então não houve uma grande preocupação em linguagem.
+
+Importante destacar também que ele é resultado de trabalhos de conclusão de cursos diferentes, então é sabido que ainda há muito espaço para melhora, e sugestões serão sempre muito bem vindas.
+
+As devidas referências estão mencionadas no arquivo readme.md deste repositório.
+
+```{r echo=FALSE, fig.align='center'}
+knitr::include_graphics(here::here("img", "redes.png"))
+```
