@@ -22,4 +22,8 @@ rmarkdown::render("relatorio_nao_direcionadas.Rmd")
 
 # iniciando o git ----
 
+usethis::use_git()
 
+usethis::use_github()
+
+renv::snapshot()
