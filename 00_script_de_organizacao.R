@@ -1,6 +1,10 @@
-# inicializando o renv
+# inicializando o renv e utilizando ele ----
 
-renv::init()
+# renv::init() # criado no início do projeto
+
+# renv::snapshot() # utilizado com o desenvolver do projeto
+
+# renv::restore() -> deve ser usado caso o repositório seja copiado e o indivíduo não tenha os pacotes necessários instalados
 
 # cricacao de pastas de organizacao ----
 
@@ -22,8 +26,8 @@ rmarkdown::render("relatorio_nao_direcionadas.Rmd")
 
 # iniciando o git ----
 
-usethis::use_git()
+## é interessante só rodar no console
 
-usethis::use_github()
+# usethis::use_git()
 
-renv::snapshot()
+# usethis::use_github()
