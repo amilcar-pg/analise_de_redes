@@ -17,14 +17,6 @@ output:
 knitr::opts_chunk$set(cache = TRUE)
 ```
 
-```{r, echo=FALSE}
-
-htmltools::img(src = knitr::image_uri(file.path(R.home("doc"), "html", "img/redes.png")), 
-               alt = 'logo', 
-               style = 'position:absolute; top:0; right:0; padding:10px;')
-
-```
-
 # Importando dados
 
 Este relatório está por padrão com a visualização habilitada dos códigos utilizados para gerar os outputs que aqui serão visualizados. Caso não seja de seu interesse, basta mudar a opção localizada no canto superior direito da tela para "Hide", e você poderá ler o relatório de forma mais limpa.
